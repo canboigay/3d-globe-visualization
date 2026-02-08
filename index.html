@@ -30,14 +30,60 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: var(--bg-primary);
+      background: #000000;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    /* Flat Map Canvas */
+    #flatMap {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 4;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+      transform: perspective(1500px) rotateX(-90deg) scale(0.5);
+      transform-origin: center center;
+    }
+
+    #flatMap.active {
+      opacity: 1;
+      pointer-events: all;
+      transform: perspective(1500px) rotateX(0deg) scale(1);
     }
 
     #globe-container {
       width: 100%;
       height: 100%;
-      position: relative;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 5;
+      transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-origin: center center;
+    }
+
+    #globe-container.flattening {
+      transform: perspective(1500px) rotateX(90deg) scale(1.5);
+      opacity: 0;
+    }
+
+    #globe-container.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: perspective(1500px) rotateX(90deg) scale(1.5);
+    }
+
+    #globe-container > div {
+      position: relative !important;
+      z-index: 10 !important;
+    }
+
+    #globe-container canvas:not([id*="starfield"]) {
+      z-index: 10 !important;
     }
 
     .scanline {
@@ -49,8 +95,8 @@
         0deg,
         transparent,
         transparent 2px,
-        rgba(0, 255, 0, 0.02) 2px,
-        rgba(0, 255, 0, 0.02) 4px
+        rgba(0, 255, 0, 0.005) 2px,
+        rgba(0, 255, 0, 0.005) 4px
       );
       animation: scanline 10s linear infinite;
     }
@@ -325,6 +371,33 @@
       color: var(--color-info);
     }
 
+    .country-btn {
+      display: block;
+      width: 100%;
+      padding: 8px 12px;
+      background: rgba(0, 255, 136, 0.08);
+      border: 1px solid rgba(0, 255, 136, 0.2);
+      border-radius: 6px;
+      color: #00ff88;
+      font-size: 12px;
+      cursor: pointer;
+      margin-bottom: 6px;
+      transition: all 0.2s ease;
+      text-align: left;
+      font-weight: 500;
+    }
+
+    .country-btn:hover {
+      background: rgba(0, 255, 136, 0.2);
+      border-color: #00ff88;
+    }
+
+    .country-btn.active {
+      background: rgba(0, 255, 136, 0.3);
+      border-color: #00ff88;
+      box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+    }
+
     /* Texture Switcher Bar */
     .texture-bar {
       position: fixed;
@@ -395,7 +468,7 @@
     .search-toggle {
       position: fixed;
       top: 85px;
-      right: 70px;
+      right: 180px;
       width: 40px;
       height: 40px;
       background: rgba(255, 255, 255, 0.05);
@@ -415,6 +488,37 @@
       background: rgba(59, 130, 246, 0.1);
       border-color: var(--color-info);
       color: var(--color-info);
+    }
+
+    /* Mode Toggle */
+    .mode-toggle {
+      position: fixed;
+      top: 85px;
+      right: 20px;
+      padding: 10px 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      z-index: 60;
+      backdrop-filter: blur(12px);
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-family: inherit;
+    }
+
+    .mode-toggle:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255,255,255,0.3);
+    }
+
+    .mode-toggle:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     /* Responsive */
@@ -487,6 +591,7 @@
   </style>
 </head>
 <body>
+  <canvas id="flatMap"></canvas>
   <div id="globe-container"></div>
 
   <div class="loading-overlay" id="loadingOverlay">
@@ -517,6 +622,8 @@
   </div>
 
   <button class="search-toggle" id="searchToggle">🔍</button>
+  
+  <button class="mode-toggle" id="modeToggle">Flatten Map</button>
 
   <div class="search-panel" id="searchPanel">
     <input type="text" class="search-input" id="searchInput" placeholder="Search cities...">
@@ -546,14 +653,136 @@
   </div>
 
   <div class="flyto-panel" id="flytoPanel">
-    <button class="flyto-btn" data-lat="55.7558" data-lng="37.6173">Moscow</button>
-    <button class="flyto-btn" data-lat="40.7128" data-lng="-74.006">New York</button>
-    <button class="flyto-btn" data-lat="35.6762" data-lng="139.6503">Tokyo</button>
-    <button class="flyto-btn" data-lat="-33.8688" data-lng="151.2093">Sydney</button>
-    <button class="flyto-btn" data-lat="51.5074" data-lng="-0.1278">London</button>
-    <button class="flyto-btn" data-lat="39.9042" data-lng="116.4074">Beijing</button>
-    <button class="flyto-btn" data-lat="37.5665" data-lng="126.978">Seoul</button>
-    <button class="flyto-btn" data-lat="25.2048" data-lng="55.2708">Dubai</button>
+    <input type="text" id="citySearch" class="search-input" placeholder="Search location..." style="margin-bottom: 10px;">
+    <div id="cityList" style="max-height: 400px; overflow-y: auto;">
+      <!-- North America -->
+      <button class="flyto-btn" data-lat="40.7128" data-lng="-74.006">New York, USA</button>
+      <button class="flyto-btn" data-lat="34.0522" data-lng="-118.2437">Los Angeles, USA</button>
+      <button class="flyto-btn" data-lat="41.8781" data-lng="-87.6298">Chicago, USA</button>
+      <button class="flyto-btn" data-lat="29.7604" data-lng="-95.3698">Houston, USA</button>
+      <button class="flyto-btn" data-lat="37.7749" data-lng="-122.4194">San Francisco, USA</button>
+      <button class="flyto-btn" data-lat="47.6062" data-lng="-122.3321">Seattle, USA</button>
+      <button class="flyto-btn" data-lat="25.7617" data-lng="-80.1918">Miami, USA</button>
+      <button class="flyto-btn" data-lat="38.9072" data-lng="-77.0369">Washington DC, USA</button>
+      <button class="flyto-btn" data-lat="42.3601" data-lng="-71.0589">Boston, USA</button>
+      <button class="flyto-btn" data-lat="43.6532" data-lng="-79.3832">Toronto, Canada</button>
+      <button class="flyto-btn" data-lat="45.5017" data-lng="-73.5673">Montreal, Canada</button>
+      <button class="flyto-btn" data-lat="49.2827" data-lng="-123.1207">Vancouver, Canada</button>
+      <button class="flyto-btn" data-lat="19.4326" data-lng="-99.1332">Mexico City, Mexico</button>
+      <!-- South America -->
+      <button class="flyto-btn" data-lat="-23.5505" data-lng="-46.6333">São Paulo, Brazil</button>
+      <button class="flyto-btn" data-lat="-22.9068" data-lng="-43.1729">Rio de Janeiro, Brazil</button>
+      <button class="flyto-btn" data-lat="-34.6037" data-lng="-58.3816">Buenos Aires, Argentina</button>
+      <button class="flyto-btn" data-lat="-33.4489" data-lng="-70.6693">Santiago, Chile</button>
+      <button class="flyto-btn" data-lat="4.7110" data-lng="-74.0721">Bogotá, Colombia</button>
+      <button class="flyto-btn" data-lat="-12.0464" data-lng="-77.0428">Lima, Peru</button>
+      <!-- Europe -->
+      <button class="flyto-btn" data-lat="51.5074" data-lng="-0.1278">London, UK</button>
+      <button class="flyto-btn" data-lat="48.8566" data-lng="2.3522">Paris, France</button>
+      <button class="flyto-btn" data-lat="52.5200" data-lng="13.4050">Berlin, Germany</button>
+      <button class="flyto-btn" data-lat="50.1109" data-lng="8.6821">Frankfurt, Germany</button>
+      <button class="flyto-btn" data-lat="48.1351" data-lng="11.5820">Munich, Germany</button>
+      <button class="flyto-btn" data-lat="41.9028" data-lng="12.4964">Rome, Italy</button>
+      <button class="flyto-btn" data-lat="45.4642" data-lng="9.1900">Milan, Italy</button>
+      <button class="flyto-btn" data-lat="40.4168" data-lng="-3.7038">Madrid, Spain</button>
+      <button class="flyto-btn" data-lat="41.3851" data-lng="2.1734">Barcelona, Spain</button>
+      <button class="flyto-btn" data-lat="52.3676" data-lng="4.9041">Amsterdam, Netherlands</button>
+      <button class="flyto-btn" data-lat="50.8503" data-lng="4.3517">Brussels, Belgium</button>
+      <button class="flyto-btn" data-lat="47.3769" data-lng="8.5417">Zurich, Switzerland</button>
+      <button class="flyto-btn" data-lat="59.3293" data-lng="18.0686">Stockholm, Sweden</button>
+      <button class="flyto-btn" data-lat="60.1699" data-lng="24.9384">Helsinki, Finland</button>
+      <button class="flyto-btn" data-lat="55.6761" data-lng="12.5683">Copenhagen, Denmark</button>
+      <button class="flyto-btn" data-lat="59.9139" data-lng="10.7522">Oslo, Norway</button>
+      <button class="flyto-btn" data-lat="38.7223" data-lng="-9.1393">Lisbon, Portugal</button>
+      <button class="flyto-btn" data-lat="53.3498" data-lng="-6.2603">Dublin, Ireland</button>
+      <button class="flyto-btn" data-lat="47.4979" data-lng="19.0402">Budapest, Hungary</button>
+      <button class="flyto-btn" data-lat="50.0755" data-lng="14.4378">Prague, Czech Republic</button>
+      <button class="flyto-btn" data-lat="52.2297" data-lng="21.0122">Warsaw, Poland</button>
+      <button class="flyto-btn" data-lat="48.2082" data-lng="16.3738">Vienna, Austria</button>
+      <button class="flyto-btn" data-lat="55.7558" data-lng="37.6173">Moscow, Russia</button>
+      <button class="flyto-btn" data-lat="59.9311" data-lng="30.3609">St. Petersburg, Russia</button>
+      <button class="flyto-btn" data-lat="50.4501" data-lng="30.5234">Kyiv, Ukraine</button>
+      <button class="flyto-btn" data-lat="41.0082" data-lng="28.9784">Istanbul, Turkey</button>
+      <button class="flyto-btn" data-lat="39.9334" data-lng="32.8597">Ankara, Turkey</button>
+      <button class="flyto-btn" data-lat="37.9838" data-lng="23.7275">Athens, Greece</button>
+      <!-- Middle East -->
+      <button class="flyto-btn" data-lat="25.2048" data-lng="55.2708">Dubai, UAE</button>
+      <button class="flyto-btn" data-lat="24.7136" data-lng="46.6753">Riyadh, Saudi Arabia</button>
+      <button class="flyto-btn" data-lat="29.3117" data-lng="47.4818">Kuwait City, Kuwait</button>
+      <button class="flyto-btn" data-lat="25.2854" data-lng="51.5310">Doha, Qatar</button>
+      <button class="flyto-btn" data-lat="33.8886" data-lng="35.4955">Beirut, Lebanon</button>
+      <button class="flyto-btn" data-lat="31.7683" data-lng="35.2137">Jerusalem, Israel</button>
+      <button class="flyto-btn" data-lat="32.0853" data-lng="34.7818">Tel Aviv, Israel</button>
+      <button class="flyto-btn" data-lat="35.6892" data-lng="51.3890">Tehran, Iran</button>
+      <button class="flyto-btn" data-lat="33.3152" data-lng="44.3661">Baghdad, Iraq</button>
+      <!-- Africa -->
+      <button class="flyto-btn" data-lat="30.0444" data-lng="31.2357">Cairo, Egypt</button>
+      <button class="flyto-btn" data-lat="33.9716" data-lng="-6.8498">Casablanca, Morocco</button>
+      <button class="flyto-btn" data-lat="36.7538" data-lng="3.0588">Algiers, Algeria</button>
+      <button class="flyto-btn" data-lat="-1.2921" data-lng="36.8219">Nairobi, Kenya</button>
+      <button class="flyto-btn" data-lat="6.5244" data-lng="3.3792">Lagos, Nigeria</button>
+      <button class="flyto-btn" data-lat="-26.2041" data-lng="28.0473">Johannesburg, South Africa</button>
+      <button class="flyto-btn" data-lat="-33.9249" data-lng="18.4241">Cape Town, South Africa</button>
+      <button class="flyto-btn" data-lat="-6.7924" data-lng="39.2083">Dar es Salaam, Tanzania</button>
+      <button class="flyto-btn" data-lat="9.0320" data-lng="38.7469">Addis Ababa, Ethiopia</button>
+      <!-- Asia -->
+      <button class="flyto-btn" data-lat="39.9042" data-lng="116.4074">Beijing, China</button>
+      <button class="flyto-btn" data-lat="31.2304" data-lng="121.4737">Shanghai, China</button>
+      <button class="flyto-btn" data-lat="22.3193" data-lng="114.1694">Hong Kong</button>
+      <button class="flyto-btn" data-lat="23.1291" data-lng="113.2644">Guangzhou, China</button>
+      <button class="flyto-btn" data-lat="30.5728" data-lng="104.0668">Chengdu, China</button>
+      <button class="flyto-btn" data-lat="35.6762" data-lng="139.6503">Tokyo, Japan</button>
+      <button class="flyto-btn" data-lat="34.6937" data-lng="135.5023">Osaka, Japan</button>
+      <button class="flyto-btn" data-lat="37.5665" data-lng="126.9780">Seoul, South Korea</button>
+      <button class="flyto-btn" data-lat="35.1796" data-lng="129.0756">Busan, South Korea</button>
+      <button class="flyto-btn" data-lat="25.0330" data-lng="121.5654">Taipei, Taiwan</button>
+      <button class="flyto-btn" data-lat="14.5995" data-lng="120.9842">Manila, Philippines</button>
+      <button class="flyto-btn" data-lat="21.0285" data-lng="105.8542">Hanoi, Vietnam</button>
+      <button class="flyto-btn" data-lat="10.8231" data-lng="106.6297">Ho Chi Minh City, Vietnam</button>
+      <button class="flyto-btn" data-lat="13.7563" data-lng="100.5018">Bangkok, Thailand</button>
+      <button class="flyto-btn" data-lat="3.1390" data-lng="101.6869">Kuala Lumpur, Malaysia</button>
+      <button class="flyto-btn" data-lat="1.3521" data-lng="103.8198">Singapore</button>
+      <button class="flyto-btn" data-lat="-6.2088" data-lng="106.8456">Jakarta, Indonesia</button>
+      <button class="flyto-btn" data-lat="-7.2575" data-lng="112.7521">Surabaya, Indonesia</button>
+      <button class="flyto-btn" data-lat="28.6139" data-lng="77.2090">New Delhi, India</button>
+      <button class="flyto-btn" data-lat="19.0760" data-lng="72.8777">Mumbai, India</button>
+      <button class="flyto-btn" data-lat="12.9716" data-lng="77.5946">Bangalore, India</button>
+      <button class="flyto-btn" data-lat="22.5726" data-lng="88.3639">Kolkata, India</button>
+      <button class="flyto-btn" data-lat="24.8607" data-lng="67.0011">Karachi, Pakistan</button>
+      <button class="flyto-btn" data-lat="33.6844" data-lng="73.0479">Islamabad, Pakistan</button>
+      <button class="flyto-btn" data-lat="23.8103" data-lng="90.4125">Dhaka, Bangladesh</button>
+      <!-- Oceania -->
+      <button class="flyto-btn" data-lat="-33.8688" data-lng="151.2093">Sydney, Australia</button>
+      <button class="flyto-btn" data-lat="-37.8136" data-lng="144.9631">Melbourne, Australia</button>
+      <button class="flyto-btn" data-lat="-27.4698" data-lng="153.0251">Brisbane, Australia</button>
+      <button class="flyto-btn" data-lat="-31.9505" data-lng="115.8605">Perth, Australia</button>
+      <button class="flyto-btn" data-lat="-36.8485" data-lng="174.7633">Auckland, New Zealand</button>
+      <button class="flyto-btn" data-lat="-41.2865" data-lng="174.7762">Wellington, New Zealand</button>
+      <!-- Countries (Highlight Borders) -->
+      <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0; padding-top: 10px;">
+        <div style="font-size: 10px; color: #9ca3af; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Countries (Highlight)</div>
+        <button class="country-btn" data-country="United States">United States</button>
+        <button class="country-btn" data-country="Canada">Canada</button>
+        <button class="country-btn" data-country="Mexico">Mexico</button>
+        <button class="country-btn" data-country="Brazil">Brazil</button>
+        <button class="country-btn" data-country="Argentina">Argentina</button>
+        <button class="country-btn" data-country="United Kingdom">United Kingdom</button>
+        <button class="country-btn" data-country="France">France</button>
+        <button class="country-btn" data-country="Germany">Germany</button>
+        <button class="country-btn" data-country="Italy">Italy</button>
+        <button class="country-btn" data-country="Spain">Spain</button>
+        <button class="country-btn" data-country="Russia">Russia</button>
+        <button class="country-btn" data-country="China">China</button>
+        <button class="country-btn" data-country="Japan">Japan</button>
+        <button class="country-btn" data-country="India">India</button>
+        <button class="country-btn" data-country="Australia">Australia</button>
+        <button class="country-btn" data-country="South Africa">South Africa</button>
+        <button class="country-btn" data-country="Egypt">Egypt</button>
+        <button class="country-btn" data-country="Saudi Arabia">Saudi Arabia</button>
+        <button class="country-btn" data-country="Turkey">Turkey</button>
+        <button class="country-btn" data-country="South Korea">South Korea</button>
+      </div>
+    </div>
   </div>
 
   <div class="texture-bar" id="textureBar">
@@ -564,6 +793,9 @@
     <button class="texture-btn" data-texture="satellite">Satellite</button>
     <button class="texture-btn" data-texture="dark-ops">Dark Ops</button>
     <button class="texture-btn" data-texture="borders">Borders</button>
+    <button class="texture-btn" data-texture="x-ray">X-Ray</button>
+    <button class="texture-btn" data-texture="neon-outline">Neon Outline</button>
+    <button class="texture-btn" data-texture="ocean-floor">Ocean Floor</button>
     <button class="texture-btn" data-texture="classic">Classic</button>
   </div>
 
@@ -582,52 +814,98 @@
     const TEXTURES = {
       'war-ops': {
         globe: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
+        bump: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
         atmosphere: '#3b82f6',
         emissive: 0x000000,
-        emissiveIntensity: 0
+        emissiveIntensity: 0,
+        bumpScale: 10
       },
       'night-vision': {
-        globe: 'https://unpkg.com/three-globe/example/img/earth-dark.jpg',
+        globe: 'https://unpkg.com/three-globe/example/img/earth-water.png',
+        bump: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
         atmosphere: '#10b981',
         emissive: 0x00ff44,
-        emissiveIntensity: 0.1
+        emissiveIntensity: 0.2,
+        bumpScale: 8
       },
       'thermal': {
         globe: 'https://unpkg.com/three-globe/example/img/earth-water.png',
+        bump: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
         atmosphere: '#f97316',
         emissive: 0xff6600,
-        emissiveIntensity: 0.15
+        emissiveIntensity: 0.15,
+        bumpScale: 12
       },
       'tactical': {
         globe: 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg',
+        bump: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
         atmosphere: '#3b82f6',
         emissive: 0x000000,
-        emissiveIntensity: 0
+        emissiveIntensity: 0,
+        bumpScale: 10
       },
       'satellite': {
         globe: 'https://unpkg.com/three-globe/example/img/earth-day.jpg',
+        bump: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
         atmosphere: '#60a5fa',
         emissive: 0x000000,
-        emissiveIntensity: 0
+        emissiveIntensity: 0,
+        bumpScale: 10
       },
       'dark-ops': {
         globe: 'https://unpkg.com/three-globe/example/img/earth-night.jpg',
+        bump: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
         atmosphere: '#ffa500',
-        emissive: 0xffaa00,
-        emissiveIntensity: 0.3
+        emissive: 0xffaa44,
+        emissiveIntensity: 0.8,
+        bumpScale: 8
       },
       'borders': {
-        globe: 'https://unpkg.com/three-globe/example/img/earth-dark.jpg',
+        globe: 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg',
+        bump: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
         atmosphere: '#00ffff',
-        emissive: 0x00ffff,
-        emissiveIntensity: 0.1
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        bumpScale: 8
       },
       'classic': {
         globe: 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg',
+        bump: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
         atmosphere: '#3b82f6',
         emissive: 0x000000,
-        emissiveIntensity: 0
-      }
+        emissiveIntensity: 0,
+        bumpScale: 10
+      },
+      'x-ray': {
+        globe: 'https://unpkg.com/three-globe/example/img/earth-water.png',
+        bump: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
+        atmosphere: '#00ff88',
+        emissive: 0x00ff88,
+        emissiveIntensity: 1.2,
+        bumpScale: 15,
+        transparent: true,
+        opacity: 0.3,
+        wireframe: true
+      },
+      'neon-outline': {
+        globe: 'https://unpkg.com/three-globe/example/img/earth-water.png',
+        bump: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
+        atmosphere: '#000000',
+        emissive: 0x001100,
+        emissiveIntensity: 0.3,
+        bumpScale: 8,
+        transparent: true,
+        opacity: 0.4,
+        atmosphereAltitude: 0
+      },
+      'ocean-floor': {
+        globe: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
+        bump: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
+        atmosphere: '#1e40af',
+        emissive: 0x0066cc,
+        emissiveIntensity: 0.4,
+        bumpScale: 18
+      },
     };
 
     const THREATS = [
@@ -683,6 +961,8 @@
     // ====== Globe Setup ======
     let globe = null;
     let borderArcs = null;
+    let countryData = null;
+    let highlightedCountry = null;
     let filteredThreats = [...THREATS];
     let visibilityObserver = null;
     let starfieldCanvas = null;
@@ -691,11 +971,13 @@
     let isTabHidden = false;
 
     function initGlobe() {
+      const initialTexture = TEXTURES['war-ops'];
       globe = Globe()
-        .globeImageUrl(TEXTURES['war-ops'].globe)
+        .globeImageUrl(initialTexture.globe)
+        .bumpImageUrl(initialTexture.bump)
         .backgroundColor('rgba(0,0,0,0)')
         .showAtmosphere(true)
-        .atmosphereColor(TEXTURES['war-ops'].atmosphere)
+        .atmosphereColor(initialTexture.atmosphere)
         .atmosphereAltitude(0.15);
 
       globe(document.getElementById('globe-container'));
@@ -709,6 +991,20 @@
       updateThreatData();
 
       globe.onGlobeReady(() => {
+        // Increase globe visibility and apply bump mapping
+        try {
+          const mat = globe.globeMaterial();
+          if (mat) {
+            mat.opacity = 1.0;
+            mat.transparent = false;
+            if (initialTexture.bumpScale && mat.bumpScale !== undefined) {
+              mat.bumpScale = initialTexture.bumpScale;
+            }
+            mat.needsUpdate = true;
+          }
+        } catch (e) {
+          console.warn('Could not update material:', e);
+        }
         document.getElementById('loadingOverlay').classList.add('hidden');
       });
 
@@ -736,22 +1032,55 @@
 
       const config = TEXTURES[name];
       globe.globeImageUrl(config.globe);
+      if (config.bump) {
+        globe.bumpImageUrl(config.bump);
+      }
       globe.atmosphereColor(config.atmosphere);
+      
+      // Set atmosphere altitude (0 to disable glow)
+      if (config.atmosphereAltitude !== undefined) {
+        globe.atmosphereAltitude(config.atmosphereAltitude);
+      } else {
+        globe.atmosphereAltitude(0.15);
+      }
 
       try {
         const mat = globe.globeMaterial();
         if (mat) {
           mat.emissive = new THREE.Color(config.emissive);
           mat.emissiveIntensity = config.emissiveIntensity;
+          if (config.bumpScale && mat.bumpScale !== undefined) {
+            mat.bumpScale = config.bumpScale;
+          }
+          // Handle transparency
+          if (config.transparent) {
+            mat.transparent = true;
+            mat.opacity = config.opacity || 0.6;
+          } else {
+            mat.transparent = false;
+            mat.opacity = 1.0;
+          }
+          // Handle wireframe mode
+          if (config.wireframe) {
+            mat.wireframe = true;
+          } else {
+            mat.wireframe = false;
+          }
+          mat.needsUpdate = true;
         }
       } catch (e) {
         console.warn('Could not update material:', e);
       }
 
       if (name === 'borders') {
+        globe.pathsData([]);
         loadBorders();
+      } else if (name === 'neon-outline') {
+        globe.arcsData([]);
+        loadNeonBorders();
       } else {
         globe.arcsData([]);
+        globe.pathsData([]);
       }
 
       document.querySelectorAll('.texture-btn').forEach(btn => {
@@ -774,6 +1103,7 @@
       fetch('https://raw.githubusercontent.com/vasturiano/three-globe/master/example/datasets/ne_110m_admin_0_countries.geojson')
         .then(r => r.json())
         .then(data => {
+          countryData = data;
           const arcs = [];
           data.features.forEach(f => {
             const rings = f.geometry.type === 'Polygon'
@@ -788,7 +1118,8 @@
                   startLat: ring[i][1],
                   startLng: ring[i][0],
                   endLat: ring[i + 1][1],
-                  endLng: ring[i + 1][0]
+                  endLng: ring[i + 1][0],
+                  country: f.properties.ADMIN || f.properties.NAME
                 });
               }
             });
@@ -806,90 +1137,233 @@
         .catch(err => console.warn('Failed to load borders:', err));
     }
 
+    function loadNeonBorders() {
+      if (!globe) return;
+
+      fetch('https://raw.githubusercontent.com/vasturiano/three-globe/master/example/datasets/ne_110m_admin_0_countries.geojson')
+        .then(r => r.json())
+        .then(data => {
+          countryData = data;
+          const paths = [];
+          
+          data.features.forEach(f => {
+            const rings = f.geometry.type === 'Polygon'
+              ? f.geometry.coordinates
+              : f.geometry.type === 'MultiPolygon'
+              ? f.geometry.coordinates.flat()
+              : [];
+
+            rings.forEach(ring => {
+              const coords = ring.map(coord => [coord[1], coord[0]]); // [lat, lng]
+              paths.push(coords);
+            });
+          });
+
+          // Also store as arcs for backward compatibility
+          const arcs = [];
+          data.features.forEach(f => {
+            const rings = f.geometry.type === 'Polygon'
+              ? f.geometry.coordinates
+              : f.geometry.type === 'MultiPolygon'
+              ? f.geometry.coordinates.flat()
+              : [];
+
+            rings.forEach(ring => {
+              for (let i = 0; i < ring.length - 1; i++) {
+                arcs.push({
+                  startLat: ring[i][1],
+                  startLng: ring[i][0],
+                  endLat: ring[i + 1][1],
+                  endLng: ring[i + 1][0],
+                  country: f.properties.ADMIN || f.properties.NAME
+                });
+              }
+            });
+          });
+          borderArcs = arcs;
+
+          if (globe) {
+            globe.pathsData(paths)
+              .pathColor(() => '#00ff88')
+              .pathStroke(6)
+              .pathDashLength(1)
+              .pathDashGap(0)
+              .pathDashAnimateTime(0)
+              .pathAltitude(0.001);
+          }
+        })
+        .catch(err => console.warn('Failed to load neon borders:', err));
+    }
+
+    function highlightCountry(countryName) {
+      if (!globe || !borderArcs) return;
+
+      if (!countryName) {
+        // Clear highlight
+        highlightedCountry = null;
+        globe.arcsData([]);
+        return;
+      }
+
+      highlightedCountry = countryName;
+      const countryArcs = borderArcs.filter(arc => 
+        arc.country && arc.country.toLowerCase().includes(countryName.toLowerCase())
+      );
+
+      if (countryArcs.length > 0) {
+        globe.arcsData(countryArcs)
+          .arcColor(() => '#00ff88')
+          .arcStroke(2)
+          .arcAltitude(0.005)
+          .arcAltitudeAutoScale(0.5);
+
+        // Fly to country center
+        const firstArc = countryArcs[0];
+        if (firstArc && globe) {
+          globe.pointOfView({ 
+            lat: firstArc.startLat, 
+            lng: firstArc.startLng, 
+            altitude: 1.8 
+          }, 1500);
+        }
+      }
+    }
+
     // ====== Starfield ======
     function setupStarfield() {
       const container = document.getElementById('globe-container');
       starfieldCanvas = document.createElement('canvas');
-      starfieldCanvas.style.cssText = 'position:absolute;top:0;left:0;z-index:1;pointer-events:none;';
-      container.appendChild(starfieldCanvas);
+      starfieldCanvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;';
+      container.insertBefore(starfieldCanvas, container.firstChild);
 
-      const ctx = starfieldCanvas.getContext('2d');
-      starfieldCanvas.width = window.innerWidth * window.devicePixelRatio;
-      starfieldCanvas.height = window.innerHeight * window.devicePixelRatio;
-      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+      starfieldCanvas.width = window.innerWidth;
+      starfieldCanvas.height = window.innerHeight;
 
-      for (let i = 0; i < 400; i++) {
+      // Initialize stars
+      for (let i = 0; i < 200; i++) {
         starsData.push({
-          x: Math.random() * window.innerWidth,
-          y: Math.random() * window.innerHeight,
-          radius: Math.random() * 1.5,
-          opacity: Math.random() * 0.5 + 0.5,
-          twinkleSpeed: Math.random() * 0.02 + 0.005,
-          drift: Math.random() * 0.1 - 0.05,
-          layer: Math.random()
+          x: Math.random() * starfieldCanvas.width,
+          y: Math.random() * starfieldCanvas.height,
+          z: Math.random() * 4,
+          size: Math.random() * 1.5 + 0.5,
+          opacity: Math.random() * 0.5 + 0.3
         });
       }
 
-      planets.push({ x: 0.3, y: 0.2, radius: 12, color: '#999', name: 'Mercury', speed: 0.8 });
-      planets.push({ x: 0.4, y: 0.25, radius: 18, color: '#d4a574', name: 'Venus', speed: 0.6 });
-      planets.push({ x: 0.6, y: 0.3, radius: 10, color: '#ff6600', name: 'Mars', speed: 0.4 });
-      planets.push({ x: 0.75, y: 0.15, radius: 35, color: '#c88b3a', name: 'Jupiter', speed: 0.2 });
-      planets.push({ x: 0.85, y: 0.35, radius: 30, color: '#fad5a5', name: 'Saturn', speed: 0.15, hasRings: true });
-      planets.push({ x: 0.95, y: 0.25, radius: 20, color: '#4b9fbf', name: 'Neptune', speed: 0.1 });
+      // Planets with proper solar system data
+      planets.push({ name: 'Mercury', x: 0.15, y: 0.2, size: 8, color: '#8c7853', speed: 0.02 });
+      planets.push({ name: 'Venus', x: 0.25, y: 0.6, size: 18, color: '#ffc649', speed: 0.015 });
+      planets.push({ name: 'Mars', x: 0.7, y: 0.3, size: 12, color: '#cd5c5c', speed: 0.01 });
+      planets.push({ name: 'Jupiter', x: 0.8, y: 0.7, size: 45, color: '#c88b3a', speed: 0.005 });
+      planets.push({ name: 'Saturn', x: 0.2, y: 0.8, size: 38, color: '#fad5a5', speed: 0.004, hasRing: true });
+      planets.push({ name: 'Neptune', x: 0.55, y: 0.45, size: 15, color: '#4169e1', speed: 0.002 });
 
       animateStarfield();
     }
 
+    let time = 0;
+    let planetOpacity = 0;
+
     function animateStarfield() {
       const ctx = starfieldCanvas.getContext('2d');
-      const w = starfieldCanvas.width / window.devicePixelRatio;
-      const h = starfieldCanvas.height / window.devicePixelRatio;
+      const canvas = starfieldCanvas;
 
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-      ctx.fillRect(0, 0, w, h);
+      // Draw deep space black background
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const time = Date.now() * 0.001;
+      // Get camera altitude for planet visibility
       const cameraAltitude = globe ? (globe.pointOfView ? globe.pointOfView().altitude || 2.2 : 2.2) : 2.2;
-      const shouldShowPlanets = cameraAltitude > 3.0;
-      const planetOpacity = Math.min(1, Math.max(0, (cameraAltitude - 3.0) / 2.0));
+      const targetOpacity = cameraAltitude > 3 ? Math.min((cameraAltitude - 3) / 2, 1) : 0;
+      planetOpacity += (targetOpacity - planetOpacity) * 0.1;
 
+      // Add subtle solar glow in center when planets visible
+      if (planetOpacity > 0) {
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const solarGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 400);
+        solarGlow.addColorStop(0, `rgba(255, 200, 100, ${planetOpacity * 0.15})`);
+        solarGlow.addColorStop(0.3, `rgba(255, 150, 50, ${planetOpacity * 0.08})`);
+        solarGlow.addColorStop(0.6, `rgba(100, 50, 200, ${planetOpacity * 0.03})`);
+        solarGlow.addColorStop(1, 'transparent');
+        ctx.fillStyle = solarGlow;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      time += 0.001;
+
+      // Draw stars with parallax and twinkle
       starsData.forEach(star => {
-        star.x += star.drift;
-        if (star.x < 0) star.x = w;
-        if (star.x > w) star.x = 0;
+        star.opacity += (Math.random() - 0.5) * 0.03;
+        star.opacity = Math.max(0.2, Math.min(0.9, star.opacity));
+        star.x += star.z * 0.02;
+        star.y += star.z * 0.01;
 
-        star.opacity += Math.sin(time * star.twinkleSpeed) * 0.01;
-        star.opacity = Math.max(0.1, Math.min(1, star.opacity));
+        if (star.x > canvas.width) star.x = 0;
+        if (star.y > canvas.height) star.y = 0;
 
-        ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity * 0.8})`;
+        const gradient = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, star.size);
+        gradient.addColorStop(0, `rgba(255, 255, 255, ${star.opacity})`);
+        gradient.addColorStop(0.5, `rgba(200, 220, 255, ${star.opacity * 0.5})`);
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+        ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
         ctx.fill();
       });
 
-      ctx.fillStyle = 'rgba(255, 200, 0, 0.6)';
-      ctx.beginPath();
-      ctx.arc(w / 2, h / 2, 8, 0, Math.PI * 2);
-      ctx.fill();
+      // Draw planets (when zoomed out)
+      if (planetOpacity > 0) {
+        planets.forEach((planet, i) => {
+          // Orbital motion
+          const angle = time * planet.speed + i * Math.PI / 3;
+          const orbitRadius = 100 + i * 80;
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
 
-      if (shouldShowPlanets) {
-        planets.forEach(planet => {
-          const angle = time * planet.speed;
-          const x = w / 2 + Math.cos(angle) * w * planet.x;
-          const y = h / 2 + Math.sin(angle) * h * planet.y;
+          const x = centerX + Math.cos(angle) * orbitRadius * (planet.x * 3);
+          const y = centerY + Math.sin(angle) * orbitRadius * (planet.y * 2);
 
           ctx.globalAlpha = planetOpacity;
-          ctx.fillStyle = planet.color;
+
+          // Draw planet glow
+          const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, planet.size * 2);
+          glowGradient.addColorStop(0, planet.color + '80');
+          glowGradient.addColorStop(0.5, planet.color + '20');
+          glowGradient.addColorStop(1, 'transparent');
+          ctx.fillStyle = glowGradient;
           ctx.beginPath();
-          ctx.arc(x, y, planet.radius, 0, Math.PI * 2);
+          ctx.arc(x, y, planet.size * 2, 0, Math.PI * 2);
           ctx.fill();
 
-          if (planet.hasRings) {
-            ctx.strokeStyle = `rgba(255, 200, 100, ${planetOpacity * 0.5})`;
-            ctx.lineWidth = 3;
+          // Draw planet
+          const planetGradient = ctx.createRadialGradient(
+            x - planet.size * 0.3, y - planet.size * 0.3, 0,
+            x, y, planet.size
+          );
+          planetGradient.addColorStop(0, planet.color);
+          planetGradient.addColorStop(1, planet.color + '99');
+          ctx.fillStyle = planetGradient;
+          ctx.beginPath();
+          ctx.arc(x, y, planet.size, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Draw Saturn's ring
+          if (planet.hasRing) {
+            ctx.strokeStyle = planet.color + '60';
+            ctx.lineWidth = 6;
             ctx.beginPath();
-            ctx.ellipse(x, y, planet.radius * 2, planet.radius * 0.6, Math.PI * 0.3, 0, Math.PI * 2);
+            ctx.ellipse(x, y, planet.size * 1.6, planet.size * 0.5, 0, 0, Math.PI * 2);
             ctx.stroke();
+          }
+
+          // Draw planet name when very zoomed out
+          if (planetOpacity > 0.7) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(planet.name, x, y + planet.size + 15);
           }
 
           ctx.globalAlpha = 1;
@@ -947,6 +1421,22 @@
         });
       });
 
+      // City search filter
+      const citySearchInput = document.getElementById('citySearch');
+      if (citySearchInput) {
+        citySearchInput.addEventListener('input', (e) => {
+          const query = e.target.value.toLowerCase();
+          document.querySelectorAll('.flyto-btn, .country-btn').forEach(btn => {
+            const name = btn.textContent.toLowerCase();
+            if (name.includes(query)) {
+              btn.style.display = 'block';
+            } else {
+              btn.style.display = 'none';
+            }
+          });
+        });
+      }
+
       // Fly-to buttons
       document.querySelectorAll('.flyto-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -954,6 +1444,24 @@
           const lng = parseFloat(btn.dataset.lng);
           if (globe) {
             globe.pointOfView({ lat, lng, altitude: 1.5 }, 1000);
+          }
+        });
+      });
+
+      // Country highlight buttons
+      document.querySelectorAll('.country-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const country = btn.dataset.country;
+          
+          // Toggle active state
+          const wasActive = btn.classList.contains('active');
+          document.querySelectorAll('.country-btn').forEach(b => b.classList.remove('active'));
+          
+          if (wasActive) {
+            highlightCountry(null);
+          } else {
+            btn.classList.add('active');
+            highlightCountry(country);
           }
         });
       });
@@ -1031,6 +1539,158 @@
         link.click();
       }
     }
+
+    // ====== Flat Map Mode ======
+    let currentMode = '3d';
+    let currentTextureUrl = TEXTURES['war-ops'].globe;
+    const flatCanvas = document.getElementById('flatMap');
+    const flatCtx = flatCanvas.getContext('2d');
+    flatCanvas.width = window.innerWidth;
+    flatCanvas.height = window.innerHeight;
+    let mapImage = new Image();
+    mapImage.crossOrigin = 'anonymous';
+    mapImage.src = currentTextureUrl;
+   
+   let mapZoom = 1;
+    let mapOffsetX = 0;
+    let mapOffsetY = 0;
+    let isDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+
+    function latLngToMercator(lat, lng, width, height) {
+      const x = (lng + 180) * (width / 360);
+      const latRad = lat * Math.PI / 180;
+      const mercN = Math.log(Math.tan((Math.PI / 4) + (latRad / 2)));
+      const y = (height / 2) - (width * mercN / (2 * Math.PI));
+      return { x, y };
+    }
+
+    function drawFlatMap() {
+      flatCtx.clearRect(0, 0, flatCanvas.width, flatCanvas.height);
+      
+      const baseMapWidth = flatCanvas.width * 0.95;
+      const baseMapHeight = baseMapWidth * 0.5;
+      const mapWidth = baseMapWidth * mapZoom;
+      const mapHeight = baseMapHeight * mapZoom;
+      const offsetX = (flatCanvas.width - mapWidth) / 2 + mapOffsetX;
+      const offsetY = (flatCanvas.height - mapHeight) / 2 + mapOffsetY;
+
+      // Draw background gradient
+      const gradient = flatCtx.createRadialGradient(
+        flatCanvas.width / 2, flatCanvas.height / 2, 0,
+        flatCanvas.width / 2, flatCanvas.height / 2, flatCanvas.width / 1.5
+      );
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.05)');
+      gradient.addColorStop(1, 'transparent');
+      flatCtx.fillStyle = gradient;
+      flatCtx.fillRect(0, 0, flatCanvas.width, flatCanvas.height);
+
+      // Draw map
+      if (mapImage.complete) {
+        flatCtx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        flatCtx.shadowBlur = 20;
+        flatCtx.drawImage(mapImage, offsetX, offsetY, mapWidth, mapHeight);
+        flatCtx.shadowBlur = 0;
+      }
+
+      // Draw map border
+      flatCtx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      flatCtx.lineWidth = 2;
+      flatCtx.strokeRect(offsetX, offsetY, mapWidth, mapHeight);
+
+      // Draw threats
+      filteredThreats.forEach(threat => {
+        const pos = latLngToMercator(threat.lat, threat.lng, mapWidth, mapHeight);
+        const x = offsetX + pos.x;
+        const y = offsetY + pos.y;
+        const color = getColor(threat.level);
+        const pillarHeight = threat.count * 0.25;
+        const pillarWidth = 16;
+
+        // Pillar
+        const pillarGrad = flatCtx.createLinearGradient(x, y, x, y - pillarHeight);
+        pillarGrad.addColorStop(0, color + '00');
+        pillarGrad.addColorStop(0.3, color + '99');
+        pillarGrad.addColorStop(1, color);
+        flatCtx.fillStyle = pillarGrad;
+        flatCtx.fillRect(x - pillarWidth/2, y - pillarHeight, pillarWidth, pillarHeight);
+      });
+    }
+
+    // Mode toggle
+    document.getElementById('modeToggle').addEventListener('click', () => {
+      const toggle = document.getElementById('modeToggle');
+      toggle.disabled = true;
+
+      if (currentMode === '3d') {
+        currentMode = '2d';
+        toggle.textContent = 'Globe View';
+        mapZoom = 1;
+        mapOffsetX = 0;
+        mapOffsetY = 0;
+        document.getElementById('globe-container').classList.add('flattening');
+        
+        setTimeout(() => {
+          drawFlatMap();
+          flatCanvas.classList.add('active');
+          flatCanvas.style.cursor = 'grab';
+        }, 200);
+        
+        setTimeout(() => {
+          document.getElementById('globe-container').classList.add('hidden');
+          document.getElementById('globe-container').classList.remove('flattening');
+          toggle.disabled = false;
+        }, 1200);
+      } else {
+        currentMode = '3d';
+        toggle.textContent = 'Flatten Map';
+        flatCanvas.classList.remove('active');
+        document.getElementById('globe-container').classList.remove('hidden');
+        flatCanvas.style.cursor = 'default';
+        setTimeout(() => { toggle.disabled = false; }, 1200);
+      }
+    });
+
+    // Flat map controls
+    flatCanvas.addEventListener('mousedown', (e) => {
+      if (currentMode === '2d') {
+        isDragging = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+        flatCanvas.style.cursor = 'grabbing';
+      }
+    });
+
+    flatCanvas.addEventListener('mousemove', (e) => {
+      if (isDragging && currentMode === '2d') {
+        mapOffsetX += e.clientX - lastMouseX;
+        mapOffsetY += e.clientY - lastMouseY;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+        drawFlatMap();
+      }
+    });
+
+    flatCanvas.addEventListener('mouseup', () => {
+      isDragging = false;
+      if (currentMode === '2d') flatCanvas.style.cursor = 'grab';
+    });
+
+    flatCanvas.addEventListener('wheel', (e) => {
+      if (currentMode === '2d') {
+        e.preventDefault();
+        const newZoom = mapZoom * (e.deltaY > 0 ? 0.9 : 1.1);
+        if (newZoom >= 1 && newZoom <= 5) {
+          mapZoom = newZoom;
+          drawFlatMap();
+        }
+      }
+    }, { passive: false });
+
+    mapImage.onload = () => {
+      if (currentMode === '2d') drawFlatMap();
+    };
 
     // ====== Initialize ======
     window.addEventListener('load', () => {
