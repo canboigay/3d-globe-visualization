@@ -44,6 +44,32 @@ Simply open `index.html` in a modern web browser!
 
 Built with globe.gl, Three.js, and vanilla JavaScript.
 
+## Contributing
+
+When contributing, please use this commit message template:
+
+```
+
+
+# Piggy Benissy says: Write a good commit message above!
+#
+#        _._ _..._ .-',     _.._(``))
+#       '-. `     '  /-._.-'    ',/
+#          )         \            '.
+#         / _    _    |             \
+#        |  a    a    /              |
+#        \   .-.                     ;
+#         '-('' ).-'       ,'       ;
+#            '-;           |      .'
+#               \           \    /
+#               | 7  .__  _.-\   \
+#               | |  |  ``    |    |
+#              /,_|  |   /,_/    /
+#                 /,_/      '----'
+#
+# - @SimeonGarratt
+```
+
 ## License
 
 MIT License
