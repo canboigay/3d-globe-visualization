@@ -1,0 +1,40 @@
+{
+  "name": "@scafu/globe3d-enhanced",
+  "version": "1.0.0",
+  "description": "Production-ready 3D globe visualization with threat mapping, city labels, country borders, and real-time updates",
+  "main": "Globe3DEnhanced.tsx",
+  "types": "Globe3DEnhanced.tsx",
+  "keywords": [
+    "globe",
+    "3d",
+    "visualization",
+    "threejs",
+    "webgl",
+    "globe.gl",
+    "map",
+    "geographic",
+    "threat-intelligence",
+    "cybersecurity",
+    "react",
+    "typescript"
+  ],
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "globe.gl": "^2.45.0",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.0.0"
+  },
+  "author": "SCAFU",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "your-repo-url-here"
+  },
+  "bugs": {
+    "url": "your-issues-url-here"
+  },
+  "homepage": "your-homepage-url-here"
+}

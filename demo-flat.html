@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Globe3D with Flat Map</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000000;
+            color: #e8eaed;
+            overflow: hidden;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        #starfield {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        #globeViz {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: center center;
+        }
+        #globeViz.flattening {
+            transform: perspective(1500px) rotateX(90deg) scale(1.5);
+            opacity: 0;
+        }
+        #globeViz.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: perspective(1500px) rotateX(90deg) scale(1.5);
+        }
+        #flatMap {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 4;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: perspective(1500px) rotateX(-90deg) scale(0.5);
+            transform-origin: center center;
+        }
+        #flatMap.active {
+            opacity: 1;
+            pointer-events: all;
+            transform: perspective(1500px) rotateX(0deg) scale(1);
+        }
+        .hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(180deg, rgba(10,14,26,0.95) 0%, transparent 100%);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+            z-index: 50;
+        }
+        .title {
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 3px;
+        }
+        .stats {
+            font-size: 14px;
+        }
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 10px;
+            background: rgba(10, 14, 26, 0.9);
+            padding: 15px 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+        }
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #e8eaed;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255,255,255,0.3);
+        }
+        .btn.active {
+            background: rgba(59, 130, 246, 0.8);
+            border-color: rgba(59, 130, 246, 1);
+            color: #fff;
+        }
+        .mode-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #e8eaed;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s;
+        }
+        .mode-toggle:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255,255,255,0.3);
+        }
+        .warning {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #ef4444;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            animation: alertBlink 2s infinite;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            backdrop-filter: blur(10px);
+        }
+        @keyframes alertBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .threat-marker {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            z-index: 10;
+        }
+        .threat-pillar {
+            width: 20px;
+            border-radius: 4px;
+            box-shadow: 0 0 20px currentColor;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+        .threat-tooltip {
+            position: absolute;
+            background: rgba(10, 14, 26, 0.98);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid;
+            color: #e8eaed;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            white-space: nowrap;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <!-- Starfield background -->
+        <canvas id="starfield"></canvas>
+        
+        <!-- Flat map container -->
+        <canvas id="flatMap"></canvas>
+        
+        <!-- Top HUD -->
+        <div class="hud">
+            <div class="title">Threat Intelligence Dashboard</div>
+            <div class="stats">
+                <span id="time"></span> | 
+                THREATS: <span id="threat-count">0</span> | 
+                MODE: <span id="mode">3D</span>
+            </div>
+        </div>
+        
+        <!-- Warning alert -->
+        <div class="warning" id="warning" style="display: none;">
+            ⚠ <span id="warning-text"></span> CRITICAL THREATS DETECTED
+        </div>
+        
+        <!-- Mode toggle button -->
+        <button class="mode-toggle" id="mode-toggle">Flatten Map</button>
+        
+        <!-- Globe container -->
+        <div id="globeViz"></div>
+        
+        <!-- Tooltip for flat map -->
+        <div class="threat-tooltip" id="tooltip"></div>
+        
+        <!-- Texture controls -->
+        <div class="controls">
+            <button class="btn active" onclick="changeTexture('war-ops')">WAR-OPS</button>
+            <button class="btn" onclick="changeTexture('night-vision')">NIGHT VISION</button>
+            <button class="btn" onclick="changeTexture('thermal')">THERMAL</button>
+            <button class="btn" onclick="changeTexture('tactical')">TACTICAL</button>
+            <button class="btn" onclick="changeTexture('satellite')">SATELLITE</button>
+            <button class="btn" onclick="changeTexture('dark-ops')">DARK-OPS</button>
+            <button class="btn" onclick="changeTexture('borders')">BORDERS</button>
+            <button class="btn" onclick="changeTexture('classic')">CLASSIC</button>
+        </div>
+    </div>
+
+    <!-- Include globe.gl library -->
+    <script src="https://unpkg.com/globe.gl"></script>
+
+    <script>
+        // Initialize starfield
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const stars = [];
+        for (let i = 0; i < 200; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                z: Math.random() * 4,
+                size: Math.random() * 1.5 + 0.5,
+                opacity: Math.random() * 0.5 + 0.3,
+            });
+        }
+
+        // Planets data
+        const planets = [
+            { name: 'Mercury', x: 0.15, y: 0.2, size: 8, color: '#8c7853', speed: 0.02 },
+            { name: 'Venus', x: 0.25, y: 0.6, size: 18, color: '#ffc649', speed: 0.015 },
+            { name: 'Mars', x: 0.7, y: 0.3, size: 12, color: '#cd5c5c', speed: 0.01 },
+            { name: 'Jupiter', x: 0.8, y: 0.7, size: 45, color: '#c88b3a', speed: 0.005 },
+            { name: 'Saturn', x: 0.2, y: 0.8, size: 38, color: '#fad5a5', speed: 0.004, hasRing: true },
+            { name: 'Moon', x: 0.55, y: 0.45, size: 10, color: '#d3d3d3', speed: 0.03 },
+        ];
+        
+        let planetOpacity = 0;
+        let time = 0;
+
+        function animateStarfield() {
+            // Draw deep space black background
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Add subtle solar glow in center when planets visible
+            if (planetOpacity > 0) {
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                const solarGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 400);
+                solarGlow.addColorStop(0, `rgba(255, 200, 100, ${planetOpacity * 0.15})`);
+                solarGlow.addColorStop(0.3, `rgba(255, 150, 50, ${planetOpacity * 0.08})`);
+                solarGlow.addColorStop(0.6, `rgba(100, 50, 200, ${planetOpacity * 0.03})`);
+                solarGlow.addColorStop(1, 'transparent');
+                ctx.fillStyle = solarGlow;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            time += 0.001;
+
+            // Draw stars
+            stars.forEach(star => {
+                star.opacity += (Math.random() - 0.5) * 0.03;
+                star.opacity = Math.max(0.2, Math.min(0.9, star.opacity));
+                star.x += star.z * 0.02;
+                star.y += star.z * 0.01;
+
+                if (star.x > canvas.width) star.x = 0;
+                if (star.y > canvas.height) star.y = 0;
+
+                const gradient = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, star.size);
+                gradient.addColorStop(0, `rgba(255, 255, 255, ${star.opacity})`);
+                gradient.addColorStop(0.5, `rgba(200, 220, 255, ${star.opacity * 0.5})`);
+                gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw planets (when zoomed out)
+            if (planetOpacity > 0) {
+                planets.forEach((planet, i) => {
+                    // Orbital motion
+                    const angle = time * planet.speed + i * Math.PI / 3;
+                    const orbitRadius = 100 + i * 80;
+                    const centerX = canvas.width / 2;
+                    const centerY = canvas.height / 2;
+                    
+                    const x = centerX + Math.cos(angle) * orbitRadius * (planet.x * 3);
+                    const y = centerY + Math.sin(angle) * orbitRadius * (planet.y * 2);
+                    
+                    ctx.globalAlpha = planetOpacity;
+                    
+                    // Draw planet glow
+                    const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, planet.size * 2);
+                    glowGradient.addColorStop(0, planet.color + '80');
+                    glowGradient.addColorStop(0.5, planet.color + '20');
+                    glowGradient.addColorStop(1, 'transparent');
+                    ctx.fillStyle = glowGradient;
+                    ctx.beginPath();
+                    ctx.arc(x, y, planet.size * 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Draw planet
+                    const planetGradient = ctx.createRadialGradient(
+                        x - planet.size * 0.3, y - planet.size * 0.3, 0,
+                        x, y, planet.size
+                    );
+                    planetGradient.addColorStop(0, planet.color);
+                    planetGradient.addColorStop(1, planet.color + '99');
+                    ctx.fillStyle = planetGradient;
+                    ctx.beginPath();
+                    ctx.arc(x, y, planet.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Draw Saturn's ring
+                    if (planet.hasRing) {
+                        ctx.strokeStyle = planet.color + '60';
+                        ctx.lineWidth = 6;
+                        ctx.beginPath();
+                        ctx.ellipse(x, y, planet.size * 1.6, planet.size * 0.5, 0, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    
+                    // Draw planet name when very zoomed out
+                    if (planetOpacity > 0.7) {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(planet.name, x, y + planet.size + 15);
+                    }
+                    
+                    ctx.globalAlpha = 1;
+                });
+            }
+
+            requestAnimationFrame(animateStarfield);
+        }
+        animateStarfield();
+        
+        function updatePlanetVisibility(altitude) {
+            // Show planets when altitude > 3 (zoomed out)
+            const targetOpacity = altitude > 3 ? Math.min((altitude - 3) / 2, 1) : 0;
+            planetOpacity += (targetOpacity - planetOpacity) * 0.1;
+        }
+
+        // Sample threat data
+        const threats = [
+            { id: '1', lat: 55.7558, lng: 37.6173, city: 'Moscow', country: 'Russia', level: 'critical', count: 250 },
+            { id: '2', lat: 39.9042, lng: 116.4074, city: 'Beijing', country: 'China', level: 'high', count: 180 },
+            { id: '3', lat: 25.2048, lng: 55.2708, city: 'Dubai', country: 'UAE', level: 'medium', count: 95 },
+            { id: '4', lat: 51.5074, lng: -0.1278, city: 'London', country: 'UK', level: 'high', count: 140 },
+            { id: '5', lat: 40.7128, lng: -74.0060, city: 'New York', country: 'USA', level: 'critical', count: 300 },
+        ];
+
+        const LEVEL_COLORS = {
+            critical: '#ff0000',
+            high: '#ff6600',
+            medium: '#ffcc00',
+            low: '#00ff00',
+        };
+
+        const TEXTURES = {
+            'war-ops': 'https://unpkg.com/three-globe/example/img/earth-topology.png',
+            'night-vision': 'https://unpkg.com/three-globe/example/img/earth-dark.jpg',
+            'thermal': 'https://unpkg.com/three-globe/example/img/earth-water.png',
+            'tactical': 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg',
+            'satellite': 'https://unpkg.com/three-globe/example/img/earth-day.jpg',
+            'dark-ops': 'https://unpkg.com/three-globe/example/img/earth-night.jpg',
+            'borders': 'https://raw.githubusercontent.com/vasturiano/three-globe/master/example/img/earth-dark.jpg',
+            'classic': 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg',
+        };
+
+        let currentMode = '3d';
+        let currentTexture = 'war-ops';
+        let mapImage = new Image();
+        mapImage.crossOrigin = 'anonymous';
+        mapImage.src = TEXTURES[currentTexture];
+        
+        // Flat map state
+        let mapZoom = 1;
+        let mapOffsetX = 0;
+        let mapOffsetY = 0;
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        // Load country borders data
+        let countriesData = [];
+        fetch('https://raw.githubusercontent.com/vasturiano/three-globe/master/example/datasets/ne_110m_admin_0_countries.geojson')
+            .then(res => res.json())
+            .then(data => {
+                countriesData = data.features;
+                console.log('Loaded', countriesData.length, 'countries');
+            })
+            .catch(err => console.error('Failed to load countries:', err));
+
+        // Initialize globe with country borders
+        const globe = Globe()
+            .globeImageUrl(TEXTURES[currentTexture])
+            .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+            .backgroundColor('rgba(0,0,0,0)')
+            .showAtmosphere(true)
+            .atmosphereColor('#3b82f6')
+            .atmosphereAltitude(0.15)
+            .onGlobeReady(() => {
+                // Access the globe material for custom effects
+                const globeMaterial = globe.globeMaterial();
+                globeMaterial.emissive = new THREE.Color(0x000000);
+                globeMaterial.emissiveIntensity = 0;
+            })
+            .hexBinPointsData(threats)
+            .hexBinPointWeight('count')
+            .hexAltitude(d => d.sumWeight * 0.002)
+            .hexTopColor(d => LEVEL_COLORS[d.points[0].level])
+            .hexSideColor(d => LEVEL_COLORS[d.points[0].level] + '66')
+            .hexBinResolution(4)
+            .polygonsData([])
+            .polygonCapColor(() => 'rgba(0, 255, 255, 0.15)')
+            .polygonSideColor(() => 'rgba(0, 255, 255, 0.2)')
+            .polygonStrokeColor(() => '#00ffff')
+            .polygonAltitude(0.01)
+            .hexLabel(d => {
+                const point = d.points[0];
+                return `
+                    <div style="
+                        background: rgba(10, 14, 26, 0.98);
+                        padding: 12px 16px;
+                        border-radius: 8px;
+                        border: 1px solid ${LEVEL_COLORS[point.level]};
+                        color: #e8eaed;
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                        font-size: 12px;
+                        backdrop-filter: blur(10px);
+                    ">
+                        <div style="color: ${LEVEL_COLORS[point.level]}; font-weight: 600; margin-bottom: 6px;">
+                            ${point.city}
+                        </div>
+                        <div style="color: #9ca3af; font-size: 11px;">${point.country}</div>
+                        <div style="color: #9ca3af; font-size: 11px; margin-top: 4px;">Level: <span style="color: ${LEVEL_COLORS[point.level]}; font-weight: 600;">${point.level.toUpperCase()}</span></div>
+                        <div style="color: #9ca3af; font-size: 11px;">Incidents: <span style="color: #e8eaed; font-weight: 600;">${d.sumWeight}</span></div>
+                    </div>
+                `;
+            })
+            .onHexClick(hex => {
+                console.log('Target:', hex.points[0]);
+            });
+
+        globe(document.getElementById('globeViz'))
+            .pointOfView({ lat: 30, lng: 0, altitude: 2.2 });
+
+        globe.controls().autoRotate = true;
+        globe.controls().autoRotateSpeed = 0.3;
+        globe.controls().enableZoom = true;
+        globe.controls().minDistance = 200;
+        globe.controls().maxDistance = 2000;
+        
+        // Monitor camera position for planet visibility
+        let currentAltitude = 2.2;
+        setInterval(() => {
+            const pov = globe.pointOfView();
+            currentAltitude = pov.altitude;
+            updatePlanetVisibility(currentAltitude);
+        }, 100);
+
+        // Flat map setup
+        const flatCanvas = document.getElementById('flatMap');
+        const flatCtx = flatCanvas.getContext('2d');
+        flatCanvas.width = window.innerWidth;
+        flatCanvas.height = window.innerHeight;
+
+        function latLngToMercator(lat, lng, width, height) {
+            const x = (lng + 180) * (width / 360);
+            const latRad = lat * Math.PI / 180;
+            const mercN = Math.log(Math.tan((Math.PI / 4) + (latRad / 2)));
+            const y = (height / 2) - (width * mercN / (2 * Math.PI));
+            return { x, y };
+        }
+
+        function drawFlatMap() {
+            flatCtx.clearRect(0, 0, flatCanvas.width, flatCanvas.height);
+            
+            // Calculate base map dimensions - use full width for better aspect ratio
+            const baseMapWidth = flatCanvas.width * 0.95;
+            const baseMapHeight = baseMapWidth * 0.5; // Proper 2:1 Mercator ratio
+            
+            // Apply zoom
+            const mapWidth = baseMapWidth * mapZoom;
+            const mapHeight = baseMapHeight * mapZoom;
+            
+            // Calculate offset with panning
+            const offsetX = (flatCanvas.width - mapWidth) / 2 + mapOffsetX;
+            const offsetY = (flatCanvas.height - mapHeight) / 2 + mapOffsetY;
+
+            // Draw subtle background gradient
+            const gradient = flatCtx.createRadialGradient(
+                flatCanvas.width / 2, flatCanvas.height / 2, 0,
+                flatCanvas.width / 2, flatCanvas.height / 2, flatCanvas.width / 1.5
+            );
+            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.05)');
+            gradient.addColorStop(1, 'transparent');
+            flatCtx.fillStyle = gradient;
+            flatCtx.fillRect(0, 0, flatCanvas.width, flatCanvas.height);
+
+            // Draw map background
+            flatCtx.save();
+            if (mapImage.complete) {
+                // Draw map with smooth edges
+                flatCtx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                flatCtx.shadowBlur = 20;
+                flatCtx.drawImage(mapImage, offsetX, offsetY, mapWidth, mapHeight);
+                flatCtx.shadowBlur = 0;
+            }
+            
+            // Add map border
+            flatCtx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            flatCtx.lineWidth = 2;
+            flatCtx.strokeRect(offsetX, offsetY, mapWidth, mapHeight);
+            flatCtx.restore();
+
+            // Draw grid lines with better styling
+            flatCtx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            flatCtx.lineWidth = 0.5;
+            
+            // Longitude lines
+            for (let lng = -180; lng <= 180; lng += 30) {
+                const x = offsetX + ((lng + 180) / 360) * mapWidth;
+                flatCtx.beginPath();
+                flatCtx.moveTo(x, offsetY);
+                flatCtx.lineTo(x, offsetY + mapHeight);
+                flatCtx.stroke();
+            }
+            
+            // Latitude lines (approximate for Mercator)
+            for (let lat = -60; lat <= 60; lat += 30) {
+                const latRad = lat * Math.PI / 180;
+                const mercN = Math.log(Math.tan((Math.PI / 4) + (latRad / 2)));
+                const y = offsetY + (mapHeight / 2) - (mapWidth * mercN / (2 * Math.PI));
+                flatCtx.beginPath();
+                flatCtx.moveTo(offsetX, y);
+                flatCtx.lineTo(offsetX + mapWidth, y);
+                flatCtx.stroke();
+            }
+
+            // Draw threat markers with globe-like styling
+            threats.forEach(threat => {
+                const pos = latLngToMercator(threat.lat, threat.lng, mapWidth, mapHeight);
+                const x = offsetX + pos.x;
+                const y = offsetY + pos.y;
+                
+                const color = LEVEL_COLORS[threat.level];
+                const pillarHeight = threat.count * 0.25;
+                const pillarWidth = 16;
+                
+                // Draw pillar shadow
+                flatCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                flatCtx.fillRect(x - pillarWidth/2 + 3, y + 2, pillarWidth, 3);
+                
+                // Draw pillar base glow
+                const baseGradient = flatCtx.createRadialGradient(x, y, 0, x, y, pillarWidth * 1.5);
+                baseGradient.addColorStop(0, color + '40');
+                baseGradient.addColorStop(1, 'transparent');
+                flatCtx.fillStyle = baseGradient;
+                flatCtx.fillRect(x - pillarWidth * 1.5, y - pillarWidth * 1.5, pillarWidth * 3, pillarWidth * 3);
+                
+                // Draw pillar with gradient
+                const pillarGradient = flatCtx.createLinearGradient(x, y - pillarHeight, x, y);
+                pillarGradient.addColorStop(0, color);
+                pillarGradient.addColorStop(1, color + 'aa');
+                flatCtx.fillStyle = pillarGradient;
+                flatCtx.fillRect(x - pillarWidth/2, y - pillarHeight, pillarWidth, pillarHeight);
+                
+                // Draw pillar edges for 3D effect
+                flatCtx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                flatCtx.fillRect(x - pillarWidth/2, y - pillarHeight, 2, pillarHeight);
+                flatCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                flatCtx.fillRect(x + pillarWidth/2 - 2, y - pillarHeight, 2, pillarHeight);
+                
+                // Draw top cap with shine
+                flatCtx.fillStyle = color;
+                flatCtx.fillRect(x - pillarWidth/2 - 2, y - pillarHeight - 4, pillarWidth + 4, 4);
+                
+                // Top highlight
+                flatCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                flatCtx.fillRect(x - pillarWidth/2 - 2, y - pillarHeight - 4, pillarWidth + 4, 1);
+                
+                // Glow effect around pillar
+                flatCtx.shadowColor = color;
+                flatCtx.shadowBlur = 25;
+                flatCtx.globalAlpha = 0.6;
+                flatCtx.fillStyle = color;
+                flatCtx.fillRect(x - pillarWidth/2, y - pillarHeight, pillarWidth, pillarHeight);
+                flatCtx.shadowBlur = 0;
+                flatCtx.globalAlpha = 1;
+                
+                // Label with background
+                const labelY = y + 20;
+                const labelText = threat.city;
+                flatCtx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                flatCtx.textAlign = 'center';
+                const textMetrics = flatCtx.measureText(labelText);
+                
+                // Label background
+                flatCtx.fillStyle = 'rgba(10, 14, 26, 0.8)';
+                flatCtx.fillRect(x - textMetrics.width/2 - 4, labelY - 10, textMetrics.width + 8, 14);
+                
+                // Label border
+                flatCtx.strokeStyle = color + '80';
+                flatCtx.lineWidth = 1;
+                flatCtx.strokeRect(x - textMetrics.width/2 - 4, labelY - 10, textMetrics.width + 8, 14);
+                
+                // Label text
+                flatCtx.fillStyle = '#e8eaed';
+                flatCtx.fillText(labelText, x, labelY);
+            });
+        }
+
+        mapImage.onload = () => {
+            if (currentMode === '2d') {
+                drawFlatMap();
+            }
+        };
+
+        // Update stats
+        document.getElementById('threat-count').textContent = threats.length;
+        
+        const criticalCount = threats.filter(t => t.level === 'critical').length;
+        if (criticalCount > 0) {
+            document.getElementById('warning').style.display = 'block';
+            document.getElementById('warning-text').textContent = criticalCount;
+        }
+
+        // Update time
+        setInterval(() => {
+            document.getElementById('time').textContent = new Date().toLocaleTimeString() + ' UTC';
+        }, 1000);
+
+        // Mode toggle
+        document.getElementById('mode-toggle').addEventListener('click', () => {
+            const toggle = document.getElementById('mode-toggle');
+            toggle.disabled = true; // Prevent clicking during transition
+            
+            if (currentMode === '3d') {
+                // Switch to 2D with animation
+                currentMode = '2d';
+                document.getElementById('mode').textContent = '2D';
+                document.getElementById('mode-toggle').textContent = 'Globe View';
+                
+                // Reset zoom and pan
+                mapZoom = 1;
+                mapOffsetX = 0;
+                mapOffsetY = 0;
+                
+                // Start flattening animation
+                document.getElementById('globeViz').classList.add('flattening');
+                
+                // Draw flat map and show it
+                setTimeout(() => {
+                    drawFlatMap();
+                    document.getElementById('flatMap').classList.add('active');
+                    flatCanvas.style.cursor = 'grab';
+                }, 200);
+                
+                // Complete transition
+                setTimeout(() => {
+                    document.getElementById('globeViz').classList.add('hidden');
+                    document.getElementById('globeViz').classList.remove('flattening');
+                    toggle.disabled = false;
+                }, 1200);
+                
+            } else {
+                // Switch to 3D with animation
+                currentMode = '3d';
+                document.getElementById('mode').textContent = '3D';
+                document.getElementById('mode-toggle').textContent = 'Flatten Map';
+                
+                // Start unflattening animation
+                document.getElementById('flatMap').classList.remove('active');
+                document.getElementById('globeViz').classList.remove('hidden');
+                flatCanvas.style.cursor = 'default';
+                
+                setTimeout(() => {
+                    toggle.disabled = false;
+                }, 1200);
+            }
+        });
+
+        // Change texture
+        function changeTexture(texture) {
+            currentTexture = texture;
+            
+            // Update button states
+            document.querySelectorAll('.controls .btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            if (currentMode === '3d') {
+                globe.globeImageUrl(TEXTURES[texture]);
+                
+                // Change atmosphere color and borders based on texture
+                if (texture === 'night-vision') {
+                    globe.atmosphereColor('#10b981');
+                } else if (texture === 'thermal') {
+                    globe.atmosphereColor('#f97316');
+                } else if (texture === 'borders') {
+                    globe.atmosphereColor('#00ffff');
+                    // Display country borders
+                    if (countriesData.length > 0) {
+                        globe.polygonsData(countriesData)
+                            .polygonCapColor(() => 'rgba(100, 180, 255, 0.1)')
+                            .polygonSideColor(() => 'rgba(100, 180, 255, 0.15)')
+                            .polygonStrokeColor(() => '#00ffff')
+                            .polygonAltitude(0.01);
+                    }
+                } else if (texture === 'dark-ops') {
+                    globe.atmosphereColor('#ffa500');
+                    // Make city lights glow brighter
+                    setTimeout(() => {
+                        const globeMaterial = globe.globeMaterial();
+                        if (globeMaterial) {
+                            globeMaterial.emissive = new THREE.Color(0xffaa00);
+                            globeMaterial.emissiveIntensity = 0.3;
+                        }
+                    }, 100);
+                } else {
+                    globe.atmosphereColor('#3b82f6');
+                    globe.polygonsData([]);
+                }
+            } else {
+                // Update 2D map
+                mapImage.src = TEXTURES[texture];
+            }
+        }
+
+        // Flat map mouse controls
+        flatCanvas.addEventListener('mousedown', (e) => {
+            if (currentMode === '2d') {
+                isDragging = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                flatCanvas.style.cursor = 'grabbing';
+            }
+        });
+
+        flatCanvas.addEventListener('mousemove', (e) => {
+            if (isDragging && currentMode === '2d') {
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                mapOffsetX += deltaX;
+                mapOffsetY += deltaY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                drawFlatMap();
+            }
+        });
+
+        flatCanvas.addEventListener('mouseup', () => {
+            isDragging = false;
+            if (currentMode === '2d') {
+                flatCanvas.style.cursor = 'grab';
+            }
+        });
+
+        flatCanvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+            if (currentMode === '2d') {
+                flatCanvas.style.cursor = 'grab';
+            }
+        });
+
+        flatCanvas.addEventListener('wheel', (e) => {
+            if (currentMode === '2d') {
+                e.preventDefault();
+                const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
+                const newZoom = mapZoom * zoomDelta;
+                
+                // Limit zoom range
+                if (newZoom >= 1 && newZoom <= 5) {
+                    mapZoom = newZoom;
+                    drawFlatMap();
+                }
+            }
+        }, { passive: false });
+
+        flatCanvas.addEventListener('click', (e) => {
+            if (currentMode === '2d' && !isDragging) {
+                // Calculate click position relative to map
+                const rect = flatCanvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                // Check if click is on a threat marker
+                const baseMapWidth = flatCanvas.width * 0.95;
+                const baseMapHeight = baseMapWidth * 0.5;
+                const mapWidth = baseMapWidth * mapZoom;
+                const mapHeight = baseMapHeight * mapZoom;
+                const offsetX = (flatCanvas.width - mapWidth) / 2 + mapOffsetX;
+                const offsetY = (flatCanvas.height - mapHeight) / 2 + mapOffsetY;
+                
+                threats.forEach(threat => {
+                    const pos = latLngToMercator(threat.lat, threat.lng, mapWidth, mapHeight);
+                    const markerX = offsetX + pos.x;
+                    const markerY = offsetY + pos.y;
+                    
+                    // Check if click is within marker bounds
+                    if (Math.abs(x - markerX) < 30 && Math.abs(y - markerY) < 100) {
+                        alert(`${threat.city}, ${threat.country}\nThreat Level: ${threat.level.toUpperCase()}\nIncidents: ${threat.count}`);
+                    }
+                });
+            }
+        });
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            flatCanvas.width = window.innerWidth;
+            flatCanvas.height = window.innerHeight;
+            if (currentMode === '2d') {
+                drawFlatMap();
+            }
+        });
+    </script>
+</body>
+</html>
